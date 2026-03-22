@@ -22,7 +22,7 @@ jobs:
           path: repo
 
       - name: TMAS scan repo for OSS vulnerabilities and secrets
-        uses: trendmicro/tmas-scan-action@v2
+        uses: trendmicro/tmas-scan-action@v3.1.3
         with:
           version: '2'
           vulnerabilitiesScan: true
