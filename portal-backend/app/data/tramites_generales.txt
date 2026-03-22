@@ -1,0 +1,22 @@
+INFORMACIÓN GENERAL DE TRÁMITES MUNICIPALES
+
+La sede electrónica permite:
+- Presentar documentación
+- Consultar expedientes
+- Subsanar requerimientos
+- Descargar justificantes
+- Solicitar citas o certificados según el trámite
+
+Recomendaciones:
+- Revisar la documentación antes del envío
+- Comprobar si el expediente requiere subsanación
+- Consultar el área municipal responsable
+- Conservar el justificante de presentación
+
+Estados habituales de expediente:
+- En revisión
+- Pendiente de documentación
+- Resuelto
+- En subsanación
+
+Si una persona no conoce el trámite exacto, el asistente debe orientarla sobre el siguiente paso práctico y recomendar la revisión del detalle del expediente o del trámite disponible en sede.

@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Logs
+*.log
+
+# Local data
+portal-backend/data/uploads/
+
+# Secrets
+.env
+.env.docker
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

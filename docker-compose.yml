@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: ./portal-backend
+    container_name: trendo-backend
+    ports:
+      - "8007:8007"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./portal-backend/data/uploads:/data/uploads
+
+  frontend:
+    build:
+      context: ./portal-frontend
+    container_name: trendo-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend

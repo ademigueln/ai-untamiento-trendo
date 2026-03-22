@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: trendo-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: trendo-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8007
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-secret
+                  key: OPENAI_API_KEY
+            - name: UPLOAD_DIR
+              value: /data/uploads
+          volumeMounts:
+            - name: uploads-volume
+              mountPath: /data/uploads
+      volumes:
+        - name: uploads-volume
+          persistentVolumeClaim:
+            claimName: uploads-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: trendo-demo
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 8007
+      targetPort: 8007
