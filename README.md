@@ -5,7 +5,7 @@
 - portal-backend/ → API y lógica
 - portal-frontend/ → UI
 - k8s/ → despliegue Kubernetes
-- 
+
 # AI-untamiento de Trendo
 
 Demo end-to-end de protección de aplicaciones con IA y canal documental seguro utilizando capacidades de Trend Micro (Trend Vision One / TrendAI).
