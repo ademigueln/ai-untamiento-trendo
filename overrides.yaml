@@ -1,0 +1,13 @@
+visionOne:
+    bootstrapToken: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJjaWQiOiI3ZGRjNDIwOC00YjgxLTQ1YmQtOWM3Mi02ZGNmZTAxNDdiYjYiLCJjcGlkIjoic3ZwIiwicHBpZCI6InZjcyIsIml0IjoxNzc0MjE4NTA3LCJ1aWQiOiIiLCJwbCI6IjNCSnNTVjFoZ0JBSkVVd1JxYkNUbnRNUkpvViIsImV0IjoxNzc0MzA0OTA3LCJkaWQiOiJDbHVzdGVyX0FpdW50YW1pZW50by0zQkpzU1lMMEdKRVFWZ1NCck5hbEN6endwNkUiLCJ0b2tlblVzZSI6ImRldmljZSJ9.krp3Bj6JaFYSWtuZrIK8hxMsUpxVt9qt_yd9i1ThX0r2gSLsG1e-1HwZfHGQZkFGpAbaNWGM6MnAaQKbfrDn672q5pAjdfl46j3EySGKJkf6vzFTVmgq9fXzqvfkTHqPquISprlmzjkjlF0SCTz2hJSRKzD6yPg9a8_mHXDStS9EaG4BpVT17vOGV1tV1Gwq6oKooUr_ydenGvLFMi0LKHf0UMejV8Yew6wXgN0dmP0jWxbmYm7t8VozVAhmVzntVjb5CoK_e8tTwPVdz74FkBU2L1upJG5EA4xllBJSPj63HPv56L4Qa_-oNTJxXisWKHCOASGUptgH0SSFZ505WLgkr8dC4MvKBQYa2Zu9wPcGLUO5yLE5ydO9bI-qg2BaFqDi8r-yLIzn4CsyepmyaVJhc82i8s2DwU-d76qrJx8noGfCmWwAgQgIPLbq03u75uGiuAo_zEYD_U7MyYvoBv0GADKxM6tArrrU_hT12GbZGZlJ7LzzUd3rE_enuRGFUyyPdRvFgC3qQnB1k9Qq56gYJH8nNa9fhvZh5vXipiiwW04_XmNOu5-rIIZ59tmnCPtAJzDXO6n69tTAuzec_EzZw-q0ReP3EN69zwmMMlVMRbAJhQxINpGS5ZbaS0Hhfxqp9Gcir3C3-tFyUKPUw1OQPc_PjTexxg2KtIRR80w
+    endpoint: https://api.eu.xdr.trendmicro.com/external/v2/direct/vcs/external/vcs
+    exclusion:
+        namespaces: [kube-system]
+    runtimeSecurity:
+        enabled: true
+    vulnerabilityScanning:
+        enabled: true
+    malwareScanning:
+        enabled: true
+    secretScanning:
+        enabled: true

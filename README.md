@@ -1,3 +1,4 @@
+
 # AI-untamiento de Trendo
 
 Demo end-to-end de protección de aplicaciones con IA y canal documental seguro utilizando capacidades de Trend Micro (Trend Vision One / TrendAI).
@@ -78,6 +79,99 @@ El sistema se compone de tres capas principales:
 
 # File Security (modo contenerizado)
 
+=======
+## Project structure
+
+- docs/ → documentación funcional y técnica
+- scripts/ → arranque y troubleshooting
+- portal-backend/ → API y lógica
+- portal-frontend/ → UI
+- k8s/ → despliegue Kubernetes
+
+---
+
+# AI-untamiento de Trendo
+
+Demo end-to-end de protección de aplicaciones con IA y canal documental seguro utilizando capacidades de Trend Micro (Trend Vision One / TrendAI).
+
+El proyecto simula una sede electrónica municipal con:
+- Chatbot basado en LLM
+- Subida de documentación
+- Dashboard de actividad
+- Integración de seguridad en tiempo real
+
+---
+
+
+# Arquitectura
+
+El sistema se compone de tres capas principales:
+
+## Frontend
+- Aplicación React (SPA)
+- Interfaz tipo sede electrónica
+- Chat con IA
+- Subida de documentos
+- Dashboard de métricas
+
+## Backend (FastAPI)
+- API REST:
+  - /api/chat
+  - /api/files/upload
+  - /api/stats
+- Integraciones:
+  - OpenAI (LLM)
+  - Trend AI Guard
+  - Trend File Security
+
+## Seguridad (Trend Micro)
+
+### AI Guard
+- Protege el chatbot en tiempo real
+- Analiza:
+  - Prompt de entrada
+  - Respuesta del modelo
+- Detecta:
+  - Prompt injection
+  - Exfiltración de datos
+  - Contenido sensible o malicioso
+
+### File Security (contenarizado)
+- Escaneo de archivos en tiempo real
+- Desplegado como servicio dentro de Kubernetes
+- Comunicación mediante gRPC
+
+---
+
+# Flujo de funcionamiento
+
+## Chat (IA protegida)
+
+1. Usuario envía mensaje
+2. Backend envía el prompt a Trend AI Guard
+3. Si el prompt está permitido:
+   - Se consulta el modelo LLM
+4. La respuesta del modelo pasa por AI Guard
+5. Se devuelve la respuesta final al usuario
+
+---
+
+## Subida de archivos
+
+1. Usuario sube un fichero
+2. Backend lo guarda en:
+   ./data/uploads/incoming
+3. Se envía al scanner de File Security
+4. Se obtiene veredicto:
+   - clean → se mueve a /clean
+   - malicious → se mueve a /quarantine
+5. Se actualizan métricas del dashboard
+
+---
+
+# File Security (modo contenerizado)
+
+>>>>>>> 54ad982 (Refactor project structure: add docs, scripts and quickstart guide)
 En esta demo se utiliza el modelo de scanner contenerizado de Trend Vision One.
 
 ## Componentes desplegados
