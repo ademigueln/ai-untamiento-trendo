@@ -15,25 +15,66 @@ spec:
     spec:
       containers:
         - name: backend
-          image: drdro28/trendo-backend:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: drdro28/trendo-backend:0.3.3
+          imagePullPolicy: Always
           ports:
             - containerPort: 8007
+
           env:
+            # =========================
+            # OPENAI
+            # =========================
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: trendo-secret
                   key: OPENAI_API_KEY
+
+            # =========================
+            # STORAGE
+            # =========================
             - name: UPLOAD_DIR
               value: /data/uploads
+
+            # =========================
+            # FILE SECURITY (Trend)
+            # =========================
+            - name: FILE_SECURITY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-file-security
+                  key: FILE_SECURITY_API_KEY
+
+            - name: FILE_SECURITY_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-file-security
+                  key: FILE_SECURITY_HOST
+
+            # =========================
+            # AI GUARD (Trend)
+            # =========================
+            - name: TREND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-ai
+                  key: TREND_API_KEY
+
+            - name: TREND_AI_URL
+              value: "https://api.eu.xdr.trendmicro.com/v3.0/aiSecurity/applyGuardrails"
+
+            - name: TREND_AI_APP_NAME
+              value: "ai-untamiento-trendo"
+
           volumeMounts:
             - name: uploads-volume
               mountPath: /data/uploads
+
       volumes:
         - name: uploads-volume
           persistentVolumeClaim:
             claimName: uploads-pvc
+
 ---
 apiVersion: v1
 kind: Service

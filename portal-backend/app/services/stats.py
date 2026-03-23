@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from app.services.ai_events import count_ai_events
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 
@@ -20,14 +21,16 @@ def get_portal_stats() -> dict:
     clean_count = count_files_in_folder(clean_dir)
     quarantine_count = count_files_in_folder(quarantine_dir)
 
-    # Este valor NO es real todavía.
-    # Es un placeholder para demo hasta que exista integración real con guardrails.
-    blocked_ai_attempts_demo = 3
+    ai_event_stats = count_ai_events()
 
     return {
         "incoming_files": incoming_count,
         "clean_files": clean_count,
         "quarantine_files": quarantine_count,
-        "blocked_ai_attempts_demo": blocked_ai_attempts_demo,
+        "blocked_ai_attempts_demo": ai_event_stats["trend_guard_blocked"],
+        "total_ai_events": ai_event_stats["total_ai_events"],
+        "prompt_injection_blocked": ai_event_stats["prompt_injection_blocked"],
+        "sensitive_data_request_blocked": ai_event_stats["sensitive_data_request_blocked"],
+        "harmful_output_blocked": ai_event_stats["harmful_output_blocked"],
         "portal_status": "Operativo",
     }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./index.css";
+import logo from "./assets/logo.png";
 
 const API_BASE = "";
 
@@ -23,13 +24,17 @@ const [uploadLoading, setUploadLoading] = useState(false);
 const [uploadResult, setUploadResult] = useState(null);
 const [uploadStage, setUploadStage] = useState("idle");
 
-  const [stats, setStats] = useState({
-    incoming_files: 0,
-    clean_files: 0,
-    quarantine_files: 0,
-    blocked_ai_attempts_demo: 0,
-    portal_status: "Operativo",
-  });
+const [stats, setStats] = useState({
+  incoming_files: 0,
+  clean_files: 0,
+  quarantine_files: 0,
+  blocked_ai_attempts_demo: 0,
+  total_ai_events: 0,
+  prompt_injection_blocked: 0,
+  sensitive_data_request_blocked: 0,
+  harmful_output_blocked: 0,
+  portal_status: "Operativo",
+});
 
   const notices = [
     "Sede electrónica disponible 24x7 para trámites y presentación de documentación.",
@@ -166,16 +171,19 @@ const [uploadStage, setUploadStage] = useState("idle");
 
       const data = await response.json();
 
-      setMessages((prev) => {
-        const withoutTemporary = prev.filter((msg) => !msg.temporary);
-        return [
-          ...withoutTemporary,
-          {
-            role: "assistant",
-            content: data.reply || "El backend no devolvió respuesta.",
-          },
-        ];
-      });
+setMessages((prev) => {
+  const withoutTemporary = prev.filter((msg) => !msg.temporary);
+  return [
+    ...withoutTemporary,
+    {
+      role: "assistant",
+      content: data.reply || "El backend no devolvió respuesta.",
+      guard_action: data.guard_action || null,
+      guard_reason: data.guard_reason || null,
+      guard_source: data.guard_source || null,
+    },
+  ];
+});
     } catch (error) {
       console.error("Error en chatbot:", error);
 
@@ -288,14 +296,9 @@ const uploadSelectedFile = async () => {
       <header className="site-header">
         <div className="container header-main">
           <div className="brand">
-            <div className="crest">
-              <div className="crest-ring"></div>
-              <div className="crest-text">
-                <span>AI</span>
-                <span>TREND</span>
-                <span>O</span>
-              </div>
-            </div>
+            <div className="crest crest-logo">
+  <img src={logo} alt="AI-untamiento de Trendo" />
+</div>
 
             <div className="brand-text">
               <div className="eyebrow">AI-untamiento de Trendo</div>
@@ -376,13 +379,34 @@ const uploadSelectedFile = async () => {
       <div className="premium-kpi-help">Elementos aún no finalizados</div>
     </div>
 
-    <div className="premium-kpi-card kpi-ai">
-      <div className="premium-kpi-icon">AI</div>
-      <div className="premium-kpi-label">Bloqueos IA (demo)</div>
-      <div className="premium-kpi-value">{stats.blocked_ai_attempts_demo}</div>
-      <div className="premium-kpi-help">Simulación de actividad protegida</div>
-    </div>
+<div className="premium-kpi-card kpi-ai">
+  <div className="premium-kpi-icon">AI</div>
+  <div className="premium-kpi-label">Bloqueos IA</div>
+  <div className="premium-kpi-value">{stats.blocked_ai_attempts_demo}</div>
+  <div className="premium-kpi-help">Eventos bloqueados por Trend AI Guard</div>
+</div>
   </div>
+  <div className="ai-summary-strip">
+  <div className="ai-summary-item">
+    <span className="ai-summary-label">Eventos IA totales</span>
+    <span className="ai-summary-value">{stats.total_ai_events}</span>
+  </div>
+
+  <div className="ai-summary-item">
+    <span className="ai-summary-label">Prompt injections bloqueados</span>
+    <span className="ai-summary-value">{stats.prompt_injection_blocked}</span>
+  </div>
+
+  <div className="ai-summary-item">
+    <span className="ai-summary-label">Solicitudes sensibles bloqueadas</span>
+    <span className="ai-summary-value">{stats.sensitive_data_request_blocked}</span>
+  </div>
+
+  <div className="ai-summary-item">
+    <span className="ai-summary-label">Salidas dañinas bloqueadas</span>
+    <span className="ai-summary-value">{stats.harmful_output_blocked}</span>
+  </div>
+</div>
 </div>
         </section>
 
@@ -403,19 +427,36 @@ const uploadSelectedFile = async () => {
 
             <div className="chat-area">
               <div className="chat-history" ref={chatHistoryRef}>
-                {messages.map((message, index) => (
-                  <div
-                    key={`${message.role}-${index}`}
-                    className={`chat-message ${
-                      message.role === "user" ? "user-message" : "bot-message"
-                    } ${message.temporary ? "temporary-message" : ""}`}
-                  >
-                    <div className="chat-role">
-                      {message.role === "user" ? "Ciudadano" : "Asistente IA"}
-                    </div>
-                    <p>{message.content}</p>
-                  </div>
-                ))}
+{messages.map((message, index) => (
+  <div
+    key={`${message.role}-${index}`}
+    className={`chat-message ${
+      message.role === "user" ? "user-message" : "bot-message"
+    } ${message.temporary ? "temporary-message" : ""}`}
+  >
+    <div className="chat-role">
+      {message.role === "user" ? "Ciudadano" : "Asistente IA"}
+    </div>
+
+    <p>{message.content}</p>
+
+    {message.role === "assistant" &&
+      message.guard_action &&
+      message.guard_action !== "allowed" && (
+        <div className="chat-guard-alert">
+          <strong>Trend AI Guard:</strong> {message.guard_reason || "Contenido bloqueado"}
+        </div>
+      )}
+
+    {message.role === "assistant" &&
+      message.guard_action === "allowed" &&
+      message.guard_source === "trend_ai_guard" && (
+        <div className="chat-guard-ok">
+          Validado por Trend AI Guard
+        </div>
+      )}
+  </div>
+))}
               </div>
 
               <div className="suggested-questions">
@@ -570,13 +611,57 @@ const uploadSelectedFile = async () => {
       <span className="details-label">Archivo</span>
       <span className="details-value">{uploadResult.filename}</span>
     </div>
+
     <div className="upload-details-row">
       <span className="details-label">Veredicto</span>
       <span className="details-value">{uploadResult.verdict}</span>
     </div>
+
     <div className="upload-details-row">
       <span className="details-label">Destino final</span>
       <span className="details-value">{uploadResult.final_path}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Tipo de fichero</span>
+      <span className="details-value">{uploadResult.file_type || "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Malware detectado</span>
+      <span className="details-value">{uploadResult.malware_count ?? "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Scan ID</span>
+      <span className="details-value">{uploadResult.scan_id || "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Versión scanner</span>
+      <span className="details-value">{uploadResult.scanner_version || "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">SHA256</span>
+      <span className="details-value details-break">{uploadResult.file_sha256 || "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Tiempo análisis</span>
+      <span className="details-value">
+        {uploadResult.elapsed_time ? `${uploadResult.elapsed_time} µs` : "N/D"}
+      </span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Origen</span>
+      <span className="details-value">{uploadResult.data_source || "N/D"}</span>
+    </div>
+
+    <div className="upload-details-row">
+      <span className="details-label">Aplicación</span>
+      <span className="details-value">{uploadResult.app_name || "N/D"}</span>
     </div>
   </div>
 )}
