@@ -1,19 +1,23 @@
+# scripts/desplegar_demo_full.sh
 #!/bin/zsh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
 
 APP_NAMESPACE="trendo-demo"
 FS_NAMESPACE="visionone-filesecurity"
 FS_RELEASE="my-release"
 
-BACKEND_LOCAL_PORT="9000"
 BACKEND_REMOTE_PORT="8007"
-
-FRONTEND_LOCAL_PORT="8081"
 FRONTEND_REMOTE_PORT="80"
+
+ENV_FILE=".env.demo.local"
+SECRET_TEMPLATE="k8s/secret.yaml.template"
+SECRET_RENDERED="k8s/secret.yaml"
+FS_SECRET_FILE="k8s/file-security-secrets.yaml"
 
 BACKEND_PF_LOG="$PROJECT_DIR/backend-portforward.log"
 FRONTEND_PF_LOG="$PROJECT_DIR/frontend-portforward.log"
@@ -23,12 +27,53 @@ echo " AI-untamiento de Trendo - Despliegue completo "
 echo "==============================================="
 echo ""
 
-cd "$PROJECT_DIR"
+# --------------------------------------------------
+# 1. Validaciones de ficheros locales
+# --------------------------------------------------
+echo "[1/13] Validando ficheros de configuración..."
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ERROR: falta $ENV_FILE"
+  echo "Crea una copia desde el ejemplo:"
+  echo "  cp .env.demo.local.example .env.demo.local"
+  exit 1
+fi
+
+if [ ! -f "$SECRET_TEMPLATE" ]; then
+  echo "ERROR: falta $SECRET_TEMPLATE"
+  exit 1
+fi
+
+set -a
+source "$ENV_FILE"
+set +a
+
+required_vars=(
+  OPENAI_API_KEY
+  TREND_API_KEY
+  FILE_SECURITY_API_KEY
+  FILE_SECURITY_REGISTRATION_TOKEN
+  TREND_AI_URL
+  TREND_AI_APP_NAME
+  FILE_SECURITY_HOST
+  BACKEND_LOCAL_PORT
+  FRONTEND_LOCAL_PORT
+)
+
+for var_name in "${required_vars[@]}"; do
+  if [ -z "${(P)var_name:-}" ]; then
+    echo "ERROR: falta la variable $var_name en $ENV_FILE"
+    exit 1
+  fi
+done
+
+echo "Configuración local OK"
+echo ""
 
 # --------------------------------------------------
-# 1. Docker
+# 2. Docker
 # --------------------------------------------------
-echo "[1/11] Comprobando Docker Desktop..."
+echo "[2/13] Comprobando Docker Desktop..."
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker no está listo. Intentando abrir Docker Desktop..."
@@ -52,9 +97,9 @@ echo "Docker OK"
 echo ""
 
 # --------------------------------------------------
-# 2. Kubernetes
+# 3. Kubernetes
 # --------------------------------------------------
-echo "[2/11] Comprobando Kubernetes..."
+echo "[3/13] Comprobando Kubernetes..."
 
 for i in {1..60}; do
   if kubectl cluster-info >/dev/null 2>&1; then
@@ -73,47 +118,88 @@ echo "Kubernetes OK"
 echo ""
 
 # --------------------------------------------------
-# 3. Namespaces
+# 4. Namespaces
 # --------------------------------------------------
-echo "[3/11] Asegurando namespaces..."
+echo "[4/13] Asegurando namespaces..."
 kubectl create namespace "$APP_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace "$FS_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 echo "Namespaces OK"
 echo ""
 
 # --------------------------------------------------
-# 4. Secrets demo app
+# 5. Renderizar secret.yaml localmente desde plantilla
 # --------------------------------------------------
-echo "[4/11] Aplicando secrets de la demo..."
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/file-security-secrets.yaml
-echo "Secrets OK"
+echo "[5/13] Generando secret.yaml local desde plantilla..."
+cp "$SECRET_TEMPLATE" "$SECRET_RENDERED"
+
+sed -i.bak "s|__OPENAI_API_KEY__|$OPENAI_API_KEY|g" "$SECRET_RENDERED"
+sed -i.bak "s|__TREND_API_KEY__|$TREND_API_KEY|g" "$SECRET_RENDERED"
+sed -i.bak "s|__FILE_SECURITY_API_KEY__|$FILE_SECURITY_API_KEY|g" "$SECRET_RENDERED"
+sed -i.bak "s|__FILE_SECURITY_HOST__|$FILE_SECURITY_HOST|g" "$SECRET_RENDERED"
+rm -f "${SECRET_RENDERED}.bak"
+
+echo "secret.yaml generado"
 echo ""
 
 # --------------------------------------------------
-# 5. Instalar/actualizar File Security
+# 6. Generar secret de File Security localmente
 # --------------------------------------------------
-echo "[5/11] Instalando/actualizando Trend File Security..."
+echo "[6/13] Generando file-security-secrets.yaml localmente..."
+cat > "$FS_SECRET_FILE" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: token-secret
+  namespace: $FS_NAMESPACE
+type: Opaque
+stringData:
+  registration-token: "$FILE_SECURITY_REGISTRATION_TOKEN"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: device-token-secret
+  namespace: $FS_NAMESPACE
+type: Opaque
+stringData: {}
+EOF
+
+echo "file-security-secrets.yaml generado"
+echo ""
+
+# --------------------------------------------------
+# 7. Aplicar secrets de aplicación y File Security
+# --------------------------------------------------
+echo "[7/13] Aplicando secrets..."
+kubectl apply -f "$SECRET_RENDERED"
+kubectl apply -f "$FS_SECRET_FILE"
+echo "Secrets aplicados"
+echo ""
+
+# --------------------------------------------------
+# 8. Instalar/actualizar File Security
+# --------------------------------------------------
+echo "[8/13] Instalando/actualizando Trend File Security..."
 helm repo add visionone-filesecurity https://trendmicro.github.io/visionone-file-security-helm/ >/dev/null 2>&1 || true
 helm repo update >/dev/null 2>&1
 
 helm upgrade --install "$FS_RELEASE" visionone-filesecurity/visionone-filesecurity \
   -n "$FS_NAMESPACE"
 
-echo "Esperando a File Security..."
+echo "Esperando a componentes de File Security..."
 kubectl rollout status deployment/"$FS_RELEASE"-visionone-filesecurity-management-service -n "$FS_NAMESPACE" --timeout=300s
 kubectl rollout status deployment/"$FS_RELEASE"-visionone-filesecurity-scan-cache -n "$FS_NAMESPACE" --timeout=300s
 kubectl rollout status deployment/"$FS_RELEASE"-visionone-filesecurity-scanner -n "$FS_NAMESPACE" --timeout=300s
-kubectl rollout status deployment/"$FS_RELEASE"-visionone-filesecurity-backend-communicator -n "$FS_NAMESPACE" --timeout=300s || true
+kubectl rollout status deployment/"$FS_RELEASE"-visionone-filesecurity-backend-communicator -n "$FS_NAMESPACE" --timeout=300s
 
-echo "Estado actual File Security:"
-kubectl get pods -n "$FS_NAMESPACE"
+echo "File Security OK"
 echo ""
 
 # --------------------------------------------------
-# 6. Aplicar manifiestos demo
+# 9. Aplicar manifiestos de la demo
 # --------------------------------------------------
-echo "[6/11] Aplicando manifiestos Kubernetes..."
+echo "[9/13] Aplicando manifiestos Kubernetes..."
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/pvc.yaml
 kubectl apply -f k8s/backend.yaml
@@ -127,9 +213,9 @@ echo "Manifiestos OK"
 echo ""
 
 # --------------------------------------------------
-# 7. Reiniciar app
+# 10. Reiniciar backend y frontend
 # --------------------------------------------------
-echo "[7/11] Reiniciando backend y frontend..."
+echo "[10/13] Reiniciando backend y frontend..."
 kubectl rollout restart deployment/backend -n "$APP_NAMESPACE"
 kubectl rollout restart deployment/frontend -n "$APP_NAMESPACE"
 
@@ -140,9 +226,9 @@ echo "Backend y frontend OK"
 echo ""
 
 # --------------------------------------------------
-# 8. DNS interno scanner
+# 11. Verificar DNS interno del scanner
 # --------------------------------------------------
-echo "[8/11] Verificando DNS del scanner..."
+echo "[11/13] Verificando DNS interno del scanner..."
 kubectl exec -n "$APP_NAMESPACE" deployment/backend -- python - <<'PY'
 import socket
 host = "my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local"
@@ -153,9 +239,9 @@ echo "DNS scanner OK"
 echo ""
 
 # --------------------------------------------------
-# 9. Reiniciar port-forwards
+# 12. Reiniciar port-forwards
 # --------------------------------------------------
-echo "[9/11] Reiniciando port-forwards..."
+echo "[12/13] Reiniciando port-forwards..."
 pkill -f "port-forward -n $APP_NAMESPACE service/backend-service" 2>/dev/null || true
 pkill -f "port-forward -n $APP_NAMESPACE service/frontend-service" 2>/dev/null || true
 
@@ -171,21 +257,15 @@ echo "Port-forwards OK"
 echo ""
 
 # --------------------------------------------------
-# 10. Estado final
+# 13. Estado final
 # --------------------------------------------------
-echo "[10/11] Estado final"
+echo "[13/13] Estado final"
 echo ""
 echo "Pods app:"
 kubectl get pods -n "$APP_NAMESPACE"
 echo ""
 echo "Pods file security:"
 kubectl get pods -n "$FS_NAMESPACE"
-echo ""
-
-# --------------------------------------------------
-# 11. URLs
-# --------------------------------------------------
-echo "[11/11] URLs"
 echo ""
 echo "Frontend: http://127.0.0.1:${FRONTEND_LOCAL_PORT}"
 echo "Backend:  http://127.0.0.1:${BACKEND_LOCAL_PORT}"
