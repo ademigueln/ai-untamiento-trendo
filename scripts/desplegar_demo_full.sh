@@ -129,6 +129,34 @@ echo ""
 # --------------------------------------------------
 # 5. Renderizar secret.yaml localmente desde plantilla
 # --------------------------------------------------
+echo "[CHECK] Validando secrets..."
+
+# Función helper
+check_var() {
+  local var_name="$1"
+  local var_value="${!var_name}"
+
+  if [ -z "$var_value" ]; then
+    echo "ERROR: variable $var_name vacía"
+    exit 1
+  fi
+
+  if echo "$var_value" | grep -qi "tu_" ; then
+    echo "ERROR: variable $var_name no ha sido reemplazada (placeholder detectado)"
+    exit 1
+  fi
+}
+
+# Cargar variables
+source .env.demo.local
+
+# Validar
+check_var OPENAI_API_KEY
+check_var TREND_API_KEY
+check_var FILE_SECURITY_API_KEY
+check_var FILE_SECURITY_REGISTRATION_TOKEN
+
+echo "[OK] Secrets validados correctamente"
 echo "[5/13] Generando secret.yaml local desde plantilla..."
 cp "$SECRET_TEMPLATE" "$SECRET_RENDERED"
 
@@ -255,7 +283,17 @@ sleep 2
 
 echo "Port-forwards OK"
 echo ""
+echo "[CHECK] Test OpenAI..."
+curl -s -X POST http://127.0.0.1:9000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"ping"}' | grep -q "reply"
 
+if [ $? -ne 0 ]; then
+  echo "ERROR: OpenAI no responde correctamente"
+  exit 1
+fi
+
+echo "[OK] OpenAI funcionando"
 # --------------------------------------------------
 # 13. Estado final
 # --------------------------------------------------
