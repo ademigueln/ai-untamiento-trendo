@@ -61,7 +61,7 @@ required_vars=(
 )
 
 for var_name in "${required_vars[@]}"; do
-  if [ -z "${(P)var_name:-}" ]; then
+  if [ -z "$(printenv "$var_name")" ]; then
     echo "ERROR: falta la variable $var_name en $ENV_FILE"
     exit 1
   fi
