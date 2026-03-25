@@ -10,6 +10,30 @@ El proyecto simula una sede electrónica municipal con:
 - Integración de seguridad en tiempo real
 - Despliegue reproducible mediante un único script
 
+# Requisitos y arranque rápido
+
+## Instalar Docker Desktop (incluye Kubernetes)
+brew install --cask docker
+
+## Instalar kubectl
+brew install kubectl
+
+## Instalar Helm (necesario para File Security)
+brew install helm
+
+## Clonar el repositorio
+git clone https://github.com/ademigueln/ai-untamiento-trendo.git
+cd ai-untamiento-trendo
+
+## Crear fichero de configuración local a partir del ejemplo
+cp .env.demo.local.example .env.demo.local
+
+## Editar el fichero y pegar las credenciales necesarias (OpenAI + Trend)
+nano .env.demo.local
+
+## Lanzar el despliegue completo de la demo (incluye File Security, backend y frontend)
+./scripts/desplegar_demo_full.sh
+
 ---
 
 # Arquitectura
