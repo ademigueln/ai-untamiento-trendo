@@ -23,3 +23,6 @@ portal-backend/data/uploads/
 # IDE
 .vscode/
 .idea/
+.env.demo.local
+k8s/secret.yaml
+scripts/comandos para secrets
