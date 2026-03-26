@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: drdro28/trendo-backend:0.3.3
+          image: drdro28/trendo-backend:0.3.4
           imagePullPolicy: Always
           ports:
             - containerPort: 8007

@@ -10,8 +10,26 @@ TREND_AI_URL = os.getenv(
 TREND_API_KEY = os.getenv("TREND_API_KEY")
 TREND_AI_APP_NAME = os.getenv("TREND_AI_APP_NAME", "ai-untamiento-trendo")
 
+# -------------------------------------------------------------------
+# Este módulo encapsula TODA la integración con Trend AI Guard.
+# El resto del backend no debería construir directamente llamadas HTTP
+# a Trend, sino apoyarse en estas funciones de servicio.
+# -------------------------------------------------------------------
 
 def call_trend_ai_guard(text: str, direction: str) -> dict:
+
+# -------------------------------------------------------------------
+    # Llamada REST real al endpoint de Trend AI Guard.
+    #
+    # Parámetros:
+    # - text: contenido a analizar
+    # - direction: "input" o "output"
+    #
+    # Aunque el parámetro direction se registra y se usa a nivel lógico
+    # en la aplicación, el payload actual que se envía a Trend contiene
+    # únicamente el campo "prompt".
+    # -------------------------------------------------------------------
+
     print(f"[AI_GUARD] call_trend_ai_guard() direction={direction}")
     print(f"[AI_GUARD] URL={TREND_AI_URL}")
     print(f"[AI_GUARD] APP_NAME={TREND_AI_APP_NAME}")
@@ -68,6 +86,18 @@ def call_trend_ai_guard(text: str, direction: str) -> dict:
 
 
 def _classify_trend_result(result: dict) -> dict:
+
+ # -------------------------------------------------------------------
+    # Esta función traduce la respuesta de Trend a una estructura interna
+    # más simple para la aplicación:
+    # - allowed / not allowed
+    # - reason
+    # - tipo de evento interno
+    #
+    # Aquí también se decide qué tipo de evento registrar en función de
+    # los reasons devueltos por Trend.
+    # -------------------------------------------------------------------
+
     action = result.get("action", "Allow")
     reasons = result.get("reasons", [])
 
@@ -97,6 +127,18 @@ def _classify_trend_result(result: dict) -> dict:
 
 
 def inspect_prompt(prompt: str) -> dict:
+
+# -------------------------------------------------------------------
+    # Validación del prompt de entrada.
+    #
+    # Flujo:
+    # 1. llama a Trend
+    # 2. si Trend falla, la aplicación no bloquea por defecto
+    #    y marca source=trend_unavailable
+    # 3. si Trend responde correctamente, clasifica el resultado
+    # 4. si está bloqueado, registra evento en ai_events.py
+    # -------------------------------------------------------------------
+
     trend_result = call_trend_ai_guard(prompt, "input")
 
     if trend_result.get("status") != "ok":
@@ -126,6 +168,16 @@ def inspect_prompt(prompt: str) -> dict:
 
 
 def inspect_output(prompt: str, output_text: str) -> dict:
+
+# -------------------------------------------------------------------
+    # Validación de la salida generada por el modelo.
+    #
+    # Flujo:
+    # 1. llama a Trend con el texto de salida
+    # 2. si Trend no está disponible, no bloquea por defecto
+    # 3. si Trend responde "Block", registra evento y devuelve bloqueo
+    # -------------------------------------------------------------------
+
     trend_result = call_trend_ai_guard(output_text, "output")
 
     if trend_result.get("status") != "ok":

@@ -6,6 +6,18 @@ router = APIRouter()
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
+
+# -------------------------------------------------------------------
+    # Punto de entrada del flujo documental.
+    #
+    # Este endpoint NO llama directamente al scanner de Trend.
+    # Delega la lógica completa en:
+    # - storage.py -> store_and_classify_file(...)
+    #
+    # Después, este endpoint se limita a transformar el resultado interno
+    # en una respuesta JSON cómoda para el frontend.
+    # -------------------------------------------------------------------
+
     result = store_and_classify_file(file)
 
     scan_result = result.get("scan_result", {})

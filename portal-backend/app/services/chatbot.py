@@ -7,6 +7,12 @@ from app.services.memory import add_message, get_recent_messages
 
 load_dotenv()
 
+# -------------------------------------------------------------------
+# Este módulo encapsula la llamada al proveedor LLM.
+# No aplica seguridad de entrada ni salida: esa responsabilidad está
+# en chat.py + ai_guard.py.
+# -------------------------------------------------------------------
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """
@@ -30,6 +36,22 @@ Instrucciones:
 
 
 def get_ai_reply(message: str) -> str:
+
+# -------------------------------------------------------------------
+    # Llamada al modelo.
+    #
+    # Flujo interno:
+    # 1. valida que exista OPENAI_API_KEY
+    # 2. obtiene contexto documental
+    # 3. obtiene memoria conversacional reciente
+    # 4. construye messages
+    # 5. llama a OpenAI
+    # 6. guarda conversación en memoria
+    #
+    # Este servicio es llamado desde:
+    # - chat.py -> get_ai_reply(...)
+    # -------------------------------------------------------------------
+
     if not os.getenv("OPENAI_API_KEY"):
         return "Falta configurar la API key de OpenAI en el backend."
 

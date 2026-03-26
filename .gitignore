@@ -26,3 +26,7 @@ portal-backend/data/uploads/
 .env.demo.local
 k8s/secret.yaml
 scripts/comandos para secrets
+
+# Basura
+claveApi.txt
+claveApi.txt

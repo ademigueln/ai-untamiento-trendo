@@ -12,12 +12,27 @@ QUARANTINE_DIR = UPLOAD_DIR / "quarantine"
 
 
 def ensure_directories():
+
+# -------------------------------------------------------------------
+    # Garantiza que existan las tres zonas documentales:
+    # - incoming: staging previo al análisis
+    # - clean: archivos admitidos
+    # - quarantine: archivos retenidos
+    # -------------------------------------------------------------------
+
     INCOMING_DIR.mkdir(parents=True, exist_ok=True)
     CLEAN_DIR.mkdir(parents=True, exist_ok=True)
     QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def save_file_incoming(upload_file: UploadFile) -> Path:
+
+# -------------------------------------------------------------------
+    # Guarda el fichero recibido en la zona incoming.
+    # Esta función NO analiza nada: solo persiste el fichero para que
+    # después pueda ser escaneado por File Security.
+    # -------------------------------------------------------------------
+
     ensure_directories()
 
     file_path = INCOMING_DIR / upload_file.filename
@@ -30,6 +45,13 @@ def save_file_incoming(upload_file: UploadFile) -> Path:
 
 
 def simulate_file_analysis(filename: str) -> str:
+
+ # -------------------------------------------------------------------
+    # Lógica de simulación heredada del proyecto inicial.
+    # Actualmente el flujo real usa Trend File Security mediante scan_file().
+    # Esta función queda como resto utilitario / referencia de la fase previa.
+    # -------------------------------------------------------------------
+
     suspicious_words = ["virus", "malware", "bad"]
 
     lower_name = filename.lower()
@@ -42,6 +64,16 @@ def simulate_file_analysis(filename: str) -> str:
 
 
 def move_file_to_final_location(source_path: Path, verdict: str) -> Path:
+
+    # -------------------------------------------------------------------
+    # Traduce el veredicto lógico en una decisión de almacenamiento:
+    # - clean -> carpeta clean
+    # - cualquier otro valor distinto de clean -> quarantine
+    #
+    # Nota: el caso "error" no llega aquí, porque en store_and_classify_file
+    # se deja explícitamente el fichero en incoming.
+    # -------------------------------------------------------------------
+
     if verdict == "clean":
         destination = CLEAN_DIR / source_path.name
     else:
@@ -52,10 +84,29 @@ def move_file_to_final_location(source_path: Path, verdict: str) -> Path:
 
 
 def store_and_classify_file(upload_file: UploadFile) -> dict:
+
+# -------------------------------------------------------------------
+    # Orquestador del flujo documental.
+    #
+    # Secuencia:
+    # 1. guardar fichero en incoming
+    # 2. llamar a scan_file(...) en file_security.py
+    # 3. interpretar el resultado del scanner
+    # 4. decidir carpeta final
+    # 5. devolver resultado normalizado al endpoint
+    # -------------------------------------------------------------------
+
     print(f"[STORAGE] Procesando fichero: {upload_file.filename}")
 
     incoming_path = save_file_incoming(upload_file)
     print(f"[STORAGE] Guardado en incoming: {incoming_path}")
+
+    # -------------------------------------------------------------------
+    # Integración real con Trend File Security.
+    # Esta llamada delega en:
+    # - file_security.py -> scan_file(...)
+    # que a su vez habla con el scanner gRPC desplegado en Kubernetes.
+    # -------------------------------------------------------------------
 
     scan_result = scan_file(str(incoming_path))
     print(f"[STORAGE] Resultado scan_file(): {scan_result}")
@@ -65,6 +116,15 @@ def store_and_classify_file(upload_file: UploadFile) -> dict:
         final_path = incoming_path
         print("[STORAGE] Veredicto = error, el fichero se queda en incoming")
     else:
+
+# -------------------------------------------------------------------
+        # Parseo del resultado técnico devuelto por Trend.
+        # La lógica de negocio documental se apoya sobre:
+        # - malwareCount
+        # - malware
+        # - error
+        # -------------------------------------------------------------------
+
         atse_result = scan_result.get("result", {}).get("atse", {})
         malware_count = atse_result.get("malwareCount", 0)
         malware_info = atse_result.get("malware")
