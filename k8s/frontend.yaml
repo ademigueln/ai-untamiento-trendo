@@ -16,7 +16,7 @@ spec:
       containers:
         - name: frontend
           image: drdro28/trendo-frontend:0.3.5
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
 ---
