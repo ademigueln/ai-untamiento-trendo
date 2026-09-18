@@ -1,0 +1,89 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest' # Usa un agente Linux hospedado por Microsoft
+
+variables:
+  - group: trend-vision-one-secrets # Carga la variable TMAS_API_KEY creada en el Grupo de Variables
+  - name: TMAS_REGION
+    value: 'eu-central-1' # Sustituye por la región exacta de tu tenant en Trend Vision One
+  - name: IMAGE_NAME
+    value: 'customer-app'
+  - name: IMAGE_TAG
+    value: '$(Build.BuildId)'
+
+steps:
+- checkout: self
+
+# Paso A: Descargar e instalar la herramienta CLI de TMAS en el agente
+- bash: |
+    set -euo pipefail
+    TMP_DIR="$(mktemp -d)"
+    cd "$TMP_DIR"
+    curl -fL https://ast-cli.xdr.trendmicro.com/tmas-cli/latest/tmas-cli_Linux_x86_64.tar.gz -o tmas.tar.gz
+    tar -xzf tmas.tar.gz
+    TMAS_BINARY="$(find . -type f -name tmas -print -quit)"
+    if [ -z "$TMAS_BINARY" ]; then
+      echo "No se encontró el ejecutable de TMAS."
+      exit 1
+    fi
+    chmod +x "$TMAS_BINARY"
+    sudo install "$TMAS_BINARY" /usr/local/bin/tmas
+    tmas version
+  displayName: 'Instalar y verificar TMAS'[cite: 1]
+
+# Paso B: Compilar la imagen del contenedor
+- task: Docker@2
+  displayName: 'Compilar imagen de Docker'
+  inputs:
+    command: build
+    repository: $(IMAGE_NAME)
+    Dockerfile: '**/Dockerfile'
+    tags: $(IMAGE_TAG)
+
+# Paso C: Escanear el código fuente y la imagen Docker con TMAS
+- bash: |
+    set -euo pipefail
+    mkdir -p "$(Build.ArtifactStagingDirectory)/tmas"
+    
+    echo "Escaneando el directorio de código fuente..."
+    tmas scan \
+      dir:"$(Build.SourcesDirectory)" \
+      -V \
+      -S \
+      --redacted \
+      --region "$(TMAS_REGION)" \
+      --evaluatePolicy \
+      --output "json=$(Build.ArtifactStagingDirectory)/tmas/source-results.json" \
+      --output "markdown=$(Build.ArtifactStagingDirectory)/tmas/source-report.md"
+
+    echo "Escaneando la imagen contenedora de Docker..."
+    tmas scan \
+      docker:"$(IMAGE_NAME):$(IMAGE_TAG)" \
+      -V \
+      -M \
+      -S \
+      --redacted \
+      --region "$(TMAS_REGION)" \
+      --evaluatePolicy \
+      --saveSBOM \
+      --output "json=$(Build.ArtifactStagingDirectory)/tmas/image-results.json" \
+      --output "markdown=$(Build.ArtifactStagingDirectory)/tmas/image-report.md"
+  displayName: 'Ejecutar escaneos de seguridad de TMAS'[cite: 1]
+  env:
+    TMAS_API_KEY: $(TMAS_API_KEY) # Inyecta la API Key de forma segura como variable de entorno[cite: 1]
+
+# Paso D: Publicar los resultados como artefactos de la compilación[cite: 1]
+- task: PublishBuildArtifacts@1
+  displayName: 'Publicar reportes de TMAS'
+  condition: always() # Se ejecuta incluso si el escaneo detecta fallos y detiene el pipeline[cite: 1]
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)/tmas'
+    ArtifactName: 'tmas-results'
+    publishLocation: 'Container'
