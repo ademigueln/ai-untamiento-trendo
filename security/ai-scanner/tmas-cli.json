@@ -1,0 +1,21 @@
+{
+  "version": "2.335.0",
+  "platforms": {
+    "Darwin/arm64": {
+      "filename": "tmas-cli_Darwin_arm64.zip",
+      "sha256": "b00533e8a2a7d3b2e0abf6834d04c6a29e5e440bc0ecaba4cf5d64444b0fb649"
+    },
+    "Darwin/x86_64": {
+      "filename": "tmas-cli_Darwin_x86_64.zip",
+      "sha256": "1e33f179da331ae28d9ce21a12db724543db38445d869f99b9be026b68071a62"
+    },
+    "Linux/arm64": {
+      "filename": "tmas-cli_Linux_arm64.tar.gz",
+      "sha256": "dfee472a5bb0851de46e1b9a9dc546fa1d4f7b0b37bd07d9dfa5d2947a76065c"
+    },
+    "Linux/x86_64": {
+      "filename": "tmas-cli_Linux_x86_64.tar.gz",
+      "sha256": "3bcbeeca157a63a4efa7f89489a46b0045602417e7143bfbbde497a8f8fbe526"
+    }
+  }
+}

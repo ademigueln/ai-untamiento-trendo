@@ -1,33 +1,25 @@
 name: TMAS AI Scanner — LLM Vulnerability Scan
 
-# -------------------------------------------------------------------
-# Cuándo se ejecuta este workflow:
-#
-# - push a main: escanea automáticamente cuando hay cambios en el chatbot
-#   o en la configuración del AI Scanner
-# - pull_request: ejecuta el escaneo; la política de merge se configura en GitHub
-# - workflow_dispatch: lanzamiento manual desde la UI de GitHub Actions
-#
-# El escáner ataca el endpoint OpenAI (gpt-4o-mini) con los objetivos
-# definidos en security/ai-scanner/tmas-aiscan-llm-config.yaml y publica los
-# resultados en Vision One > Security for AI Stack > AI Scanner.
-# -------------------------------------------------------------------
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "portal-backend/app/services/chatbot.py"
       - "portal-backend/app/services/ai_guard.py"
       - "portal-backend/app/routes/chat.py"
       - "security/ai-scanner/**"
+      - "scripts/run_ai_scanner.sh"
+      - "scripts/lib/install-tmas.py"
+      - ".github/workflows/tmas-ai-scanner.yml"
   pull_request:
     paths:
       - "portal-backend/app/services/chatbot.py"
       - "portal-backend/app/services/ai_guard.py"
       - "portal-backend/app/routes/chat.py"
       - "security/ai-scanner/**"
+      - "scripts/run_ai_scanner.sh"
+      - "scripts/lib/install-tmas.py"
+      - ".github/workflows/tmas-ai-scanner.yml"
   workflow_dispatch:
 
 permissions:
@@ -37,80 +29,62 @@ permissions:
 jobs:
   tmas-ai-scanner:
     name: TMAS AI Scanner — Modelo LLM
+    # Los forks no reciben credenciales. El esquema se valida además en validate.yml.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
-
+    timeout-minutes: 20
     steps:
       - name: Checkout repositorio
         uses: actions/checkout@v4
-
-      # -------------------------------------------------------------------
-      # Descarga e instalación del CLI de TMAS (última versión)
-      # El binario se añade al PATH para los pasos siguientes.
-      # -------------------------------------------------------------------
-      - name: Instalar TMAS CLI
-        run: |
-          curl -sL https://ast-cli.xdr.trendmicro.com/tmas-cli/latest/tmas-cli_Linux_x86_64.tar.gz \
-            -o tmas-cli.tar.gz
-          tar -xzf tmas-cli.tar.gz
-          chmod +x tmas
-          echo "$PWD" >> $GITHUB_PATH
-
-      # -------------------------------------------------------------------
-      # Escaneo del modelo LLM usando el fichero de configuración YAML.
-      #
-      # Variables de entorno requeridas (configuradas como GitHub Secrets):
-      #   TMAS_API_KEY    : API key de Vision One (para autenticarse en TMAS)
-      #   OPENAI_API_KEY  : API key de OpenAI (para atacar el modelo objetivo)
-      #
-      # Los resultados se guardan en JSON y Markdown, y también se publican
-      # automáticamente en Vision One > AI Scanner.
-      # -------------------------------------------------------------------
-      - name: Ejecutar AI Scanner contra el chatbot (gpt-4o-mini)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validar configuración con el CLI fijado
+        run: ./scripts/run_ai_scanner.sh --check
+      - name: Comprobar secretos necesarios
         env:
           TMAS_API_KEY: ${{ secrets.TMAS_API_KEY }}
           TARGET_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          ./tmas aiscan llm \
-            -c security/ai-scanner/tmas-aiscan-llm-config.yaml \
-            --region eu-central-1 \
-            --output json=ai-scanner-results.json,markdown=ai-scanner-report.md
-
-      # -------------------------------------------------------------------
-      # Publicar el informe Markdown como comentario en el Pull Request.
-      # Solo se ejecuta en contexto de PR y si el paso anterior generó el
-      # fichero de resultados.
-      # -------------------------------------------------------------------
+          missing=0
+          if [[ -z "$TMAS_API_KEY" ]]; then
+            echo "::error::Falta el secreto TMAS_API_KEY en Settings > Secrets and variables > Actions."
+            missing=1
+          fi
+          if [[ -z "$TARGET_API_KEY" ]]; then
+            echo "::error::Falta el secreto OPENAI_API_KEY en Settings > Secrets and variables > Actions."
+            missing=1
+          fi
+          exit "$missing"
+      - name: Ejecutar AI Scanner contra el modelo OpenAI
+        env:
+          TMAS_API_KEY: ${{ secrets.TMAS_API_KEY }}
+          TARGET_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: ./scripts/run_ai_scanner.sh
       - name: Publicar resultados en el PR
         if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const reportPath = 'ai-scanner-report.md';
-            if (!fs.existsSync(reportPath)) {
-              console.log('No se encontró el informe del AI Scanner.');
-              return;
-            }
-            const report = fs.readFileSync(reportPath, 'utf8');
-            const body = `## 🔍 TMAS AI Scanner — Resultados del chatbot\n\n${report}`;
+            const root = '.runtime/ai-scanner/results';
+            if (!fs.existsSync(root)) return;
+            const scan = fs.readdirSync(root).sort().pop();
+            if (!scan) return;
+            const reportPath = `${root}/${scan}/ai-scanner-report.md`;
+            if (!fs.existsSync(reportPath)) return;
+            const body = `## TMAS AI Scanner — Resultados del modelo\n\n${fs.readFileSync(reportPath, 'utf8')}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: body.slice(0, 65536)
             });
-
-      # -------------------------------------------------------------------
-      # Guardar los artefactos del escaneo (JSON + Markdown) para
-      # que puedan descargarse desde la ejecución del workflow.
-      # -------------------------------------------------------------------
       - name: Guardar artefactos del escaneo
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tmas-ai-scanner-results
-          path: |
-            ai-scanner-results.json
-            ai-scanner-report.md
+          path: .runtime/ai-scanner/results/
           if-no-files-found: warn
           retention-days: 30

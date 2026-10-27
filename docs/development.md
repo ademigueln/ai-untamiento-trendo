@@ -58,3 +58,13 @@ npm run format:check --prefix portal-frontend
 ```
 
 El formato se define en `portal-frontend/.prettierrc.json` y se comprueba en CI. Los archivos históricos de referencia se conservan sin reformatearlos.
+
+## Validación de AI Scanner
+
+```sh
+./scripts/run_ai_scanner.sh --check
+```
+
+Descarga el CLI fijado y verifica el esquema con la misma versión que GitHub Actions, sin leer `.env.demo.local` ni iniciar un escaneo. Requiere Internet para la primera descarga. Las pruebas de `scripts/tests/test_ai_scanner.py` comprueban checksum, caché, protección de credenciales y argumentos del comando con dependencias simuladas.
+
+Para un escaneo real, añade `TMAS_API_KEY` y `OPENAI_API_KEY` al entorno local o a los secretos del repositorio de GitHub. La configuración apunta directamente al modelo OpenAI, no al backend con AI Guard.
