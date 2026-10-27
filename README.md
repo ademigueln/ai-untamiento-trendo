@@ -1,175 +1,125 @@
 # AI-untamiento de Trendo
 
-Demo end-to-end de protección de aplicaciones con IA y canal documental seguro utilizando capacidades de Trend Micro (Trend Vision One / TrendAI).
+Demo de sede municipal con React, FastAPI y OpenAI. Muestra protección del chat mediante AI Guard, inspección documental con File Security y análisis con TMAS. Los expedientes y el contenido institucional son ficticios.
 
-El proyecto simula una sede electrónica municipal con:
+## Arranque
 
-- Chatbot basado en LLM
-- Subida de documentación por parte de la ciudadanía
-- Dashboard de actividad
-- Integración de seguridad en tiempo real
-- Despliegue reproducible mediante un único script
+```sh
+./scripts/desplegar_demo_full_v2.sh
+```
 
-# Requisitos y arranque rápido
+Usa Colima con Docker y Kubernetes. Construye las imágenes del código local si no existe una imagen para ese contenido. Las etiqueta con su huella, las reutiliza en siguientes arranques y no las publica en ningún registro. Docker y Kubernetes de Colima comparten imágenes.
 
-## Instalar Docker Desktop (incluye Kubernetes)
-brew install --cask docker
+Las imágenes antiguas de Docker Hub ya no son la fuente del recorrido local. Esto garantiza que los cambios del código llegan a la demo. La primera construcción necesita Internet; los siguientes arranques aprovechan la caché.
 
-## Instalar kubectl
-brew install kubectl
+## Preparación
 
-## Instalar Helm (necesario para File Security)
-brew install helm
+macOS, zsh, Python 3 y estas herramientas:
 
-## Clonar el repositorio
-git clone https://github.com/ademigueln/ai-untamiento-trendo.git
-cd ai-untamiento-trendo
-
-## Crear fichero de configuración local a partir del ejemplo
+```sh
+brew install colima docker kubectl helm python@3.11
 cp .env.demo.local.example .env.demo.local
+```
 
-## Editar el fichero y pegar las credenciales necesarias (OpenAI + Trend)
-nano .env.demo.local
+Completa en `.env.demo.local` las credenciales de OpenAI, AI Guard y File Security y conserva los puertos que quieras utilizar. `TMAS_API_KEY` es solo para el escaneo independiente.
 
-## Lanzar el despliegue completo de la demo (incluye File Security, backend y frontend)
-./scripts/desplegar_demo_full.sh
+```sh
+# Valida configuración y herramientas, sin iniciar ni modificar el clúster
+./scripts/desplegar_demo_full_v2.sh --check
 
----
+# Arranca la demo
+./scripts/desplegar_demo_full_v2.sh
+```
 
-# Arquitectura
+Accesos por defecto:
 
-## Frontend
-- React SPA
-- Chat IA
-- Subida de archivos
-- Dashboard
+- Frontend: http://127.0.0.1:8081
+- Backend: http://127.0.0.1:9000
+- Estadísticas: http://127.0.0.1:9000/api/stats
 
-## Backend (FastAPI)
-- /api/chat
-- /api/files/upload
-- /api/stats
+Si Colima está apagado, se inicia con 4 CPU, 8 GB de RAM y Kubernetes. Todas las operaciones del recorrido apuntan al contexto `colima`.
 
-## Seguridad
+## Organización
 
-### AI Guard
-- Protección frente a prompt injection
-- Control de contenido
-- Protección de salida del modelo
+```text
+portal-backend/                 FastAPI, configuración central y pruebas
+portal-frontend/                React: paneles, hooks, API y datos de ejemplo
+k8s/                           Manifiestos, configuración y valores de File Security
+scripts/
+  desplegar_demo_full_v2.sh     Entrada oficial
+  apagar_demo_full.sh           Eliminación completa del despliegue
+  parar_ports.sh               Cierre de accesos locales registrados
+  update_tokens_and_deploy.sh   Actualización de tokens y despliegue
+  troubleshooting_*.sh         Pruebas con integraciones reales
+  dev_backend.sh               Desarrollo local, puerto 8007
+  dev_frontend.sh              Desarrollo local con Vite
+  validate.sh                  Pruebas, lint y build
+  lib/                         Configuración, imágenes, secretos y procesos
+  tests/                       Pruebas aisladas del despliegue y contenedores
+security/
+  ai-scanner/                  Evaluación directa del modelo OpenAI
+  labs/ollama/                 Laboratorio independiente de Ollama
+  container-security/          Referencia sin token de bootstrap
+  px/                          Recorrido Ubuntu independiente, sin claves incrustadas
+docs/
+  overview/                    Operación canónica
+  trend/                       Integraciones
+  reference/wiki/              Wiki recuperada como documentación histórica
+.runtime/                      Imágenes, manifiestos generados, logs, PID y entornos
+.local/                        Archivo privado de originales y credenciales antiguas
+```
 
-### File Security (contenarizado)
-- Scanner desplegado en Kubernetes
-- Comunicación gRPC interna
+`.runtime/` y `.local/` están ignorados por Git. Los secretos generados tienen permisos 0600 y se guardan en `.runtime/secrets/`. Los documentos siguen en el PVC y sus carpetas `incoming/`, `clean/` y `quarantine/`.
 
-### TMAS
-- Escaneo de repo
-- Escaneo de imágenes Docker
+## Funcionamiento
 
----
+- Conversaciones separadas por token aleatorio, con caducidad de 30 minutos, seis mensajes de contexto y capacidad máxima de 500 sesiones. Se conservan solo intercambios aprobados. «Nueva conversación» borra también el historial del servidor.
+- AI Guard falla en modo estricto por defecto: un error o resultado desconocido no autoriza la petición. `GUARD_FAIL_OPEN` en `k8s/config.yaml` permite una demo permisiva explícita y visible, sin incorporar respuestas no verificadas al historial.
+- Archivos con identificadores internos únicos, copia por bloques y límite de 20 MiB. Un análisis desconocido queda pendiente y nunca se admite como limpio. Los escaneos no bloquean el bucle asíncrono del servidor.
+- Eventos en SQLite, sin texto de consultas, con retención de siete días y hasta 10.000 registros. Los metadatos recientes del JSON antiguo se importan una sola vez, sin copiar prompts ni borrar el original.
+- El panel distingue servicios sin verificar, operativos y degradados según observaciones recientes. Actualiza tras chat/subidas y cada 30 segundos. No consume llamadas externas para mantener un indicador verde.
+- Contenedores sin usuario root, imágenes base fijadas por digest, dependencias fijadas, probes y límites de recursos.
 
-# Flujo
+La memoria de chat es intencionadamente efímera y de una sola réplica: se pierde al reiniciar y no reemplaza autenticación de usuarios. No debe aumentarse el número de réplicas sin cambiar el almacenamiento de sesiones.
 
-## Chat
-1. Usuario → backend
-2. Backend → AI Guard (input)
-3. Si OK → LLM
-4. LLM → AI Guard (output)
-5. Respuesta al usuario
+## Operación y diagnóstico
 
-## Archivos
-1. Upload → incoming
-2. Scan File Security
-3. Resultado:
-   - clean → clean/
-   - malicious → quarantine/
-   - error → incoming/
-
----
-
-# Arranque de la demo
-
-## Script principal
-./scripts/desplegar_demo_full.sh
-
-## Qué hace
-
-- Valida Docker y Kubernetes
-- Genera secrets desde plantilla
-- Despliega File Security
-- Despliega backend/frontend
-- Abre port-forwards
-
----
-
-# Configuración
-
-NO se suben secrets a Git.
-
-Se usa:
-.env.demo.local
-
-## Uso
-cp .env.demo.local.example .env.demo.local
-nano .env.demo.local
-./scripts/desplegar_demo_full.sh
-
----
-
-# Secrets (modo seguro)
-
-NO se suben:
-
-- .env.demo.local
-- k8s/secret.yaml
-- k8s/file-security-secrets.yaml
-
-SÍ se suben:
-
-- k8s/secret.yaml.template
-- .env.demo.local.example
-
-El script genera automáticamente:
-
-- k8s/secret.yaml
-- k8s/file-security-secrets.yaml
-
----
-
-# File Security
-
-Namespace: visionone-filesecurity
-Scanner: my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local:50051
-
----
-
-# Troubleshooting
+```sh
+./scripts/parar_ports.sh
+./scripts/update_tokens_and_deploy.sh
 ./scripts/troubleshooting_demo.sh
 ./scripts/troubleshooting_ai_guard.sh
 ./scripts/troubleshooting_file_security.sh
+```
 
----
+Los diagnósticos hacen llamadas reales; el general sube una muestra EICAR. El arranque solo comprueba HTTP y readiness, sin enviar mensajes de pago al LLM. Los port-forwards se registran y se detienen por PID validado, sin buscar procesos globalmente por nombre.
 
-# Apagado completo
-./scripts/apagar_demo_full.sh
+Para reparar componentes de registro de File Security de forma explícita:
 
----
+```sh
+./scripts/desplegar_demo_full_v2.sh --repair-security
+```
 
-# Acceso
+El arranque normal conserva su registro y evita reinicios forzados de esos componentes. Usa el chart 1.6.3, la versión instalada al revisar la demo.
 
-Frontend: http://localhost:8081
-Backend: http://localhost:9000/api/stats
+**Apagado completo:** `./scripts/apagar_demo_full.sh` desinstala File Security y elimina los dos namespaces y el PVC documental. Para conservar el despliegue y los datos, cierra solo los puertos. El apagado completo no detiene Colima ni borra las credenciales locales.
 
----
+Logs en `.runtime/logs/`, versiones de imágenes en `.runtime/images.json` y manifiestos preparados en `.runtime/manifests/`.
 
-# TL;DR
-git clone https://github.com/ademigueln/ai-untamiento-trendo.git
-cd ai-untamiento-trendo
-cp .env.demo.local.example .env.demo.local
-nano .env.demo.local
-./scripts/desplegar_demo_full.sh
+## Validación y documentación
 
----
+Prepara el entorno según [Desarrollo](docs/development.md) y ejecuta:
 
-# Autor
+```sh
+./scripts/validate.sh
+```
 
-Álvaro de Miguel
+Para comprobar las imágenes ya construidas, sin credenciales ni cambios en Kubernetes:
 
+```sh
+DOCKER_HOST="unix://$HOME/.colima/default/docker.sock" python3 scripts/tests/smoke_containers.py
+```
+
+[Índice de documentación](docs/README.md) · [Operación y decisiones](docs/overview/OPERACION_DEMO.md) · [Integraciones independientes](security/README.md) · [Revisión inicial e incidencias corregidas](docs/reference/REVISION_INICIAL_2026-10-26.md).
+
+Las credenciales retiradas y los originales están conservados en `.local/`. Se han sacado del seguimiento de Git los secretos antiguos, datos de usuario, overrides con token y el gitlink incompleto de la wiki. El responsable confirmó la rotación de las credenciales expuestas el 27 de octubre de 2026. Los originales privados siguen excluidos de Git; la retirada de archivos no elimina sus versiones históricas.

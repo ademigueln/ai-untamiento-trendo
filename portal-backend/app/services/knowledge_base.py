@@ -1,8 +1,11 @@
-from pathlib import Path
+from functools import lru_cache
+import unicodedata
+from app.core.config import settings
 
-DATA_DIR = Path("app/data")
+DATA_DIR = settings.knowledge_dir
 
 
+@lru_cache(maxsize=16)
 def load_document(filename: str) -> str:
     path = DATA_DIR / filename
     if not path.exists():
@@ -11,7 +14,7 @@ def load_document(filename: str) -> str:
 
 
 def get_relevant_context(user_message: str) -> str:
-    text = user_message.lower()
+    text = "".join(c for c in unicodedata.normalize("NFD", user_message.lower()) if not unicodedata.combining(c))
 
     context_parts = []
 

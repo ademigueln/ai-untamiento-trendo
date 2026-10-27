@@ -1,0 +1,7 @@
+# Valores del recorrido oficial. El noProxy dinámico se añade en el despliegue.
+visiononeFilesecurity:
+  scanner:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi

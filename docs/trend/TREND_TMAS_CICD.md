@@ -1,151 +1,29 @@
-# TREND_TMAS_CICD.md
+# TMAS y validación continua
 
-# Trend Micro Artifact Scanner (TMAS) – Integración en CI/CD
+Los archivos de `.github/workflows/` separan validación funcional y análisis de seguridad. Se preparan localmente; su publicación y ejecución en GitHub son un paso independiente.
 
-## Descripción
+## Validación de la aplicación
 
-TMAS se ha integrado en GitHub Actions para añadir una capa de seguridad de pipeline.
+`validate.yml` ejecuta pruebas Python, pruebas del despliegue con herramientas simuladas, comprobación de formato, lint y build del frontend. Utiliza los lockfiles del proyecto y no necesita credenciales de proveedores.
 
-Se han definido dos workflows:
+## Escaneo del repositorio
 
-1. Escaneo del repositorio
-2. Escaneo de imágenes Docker
+`tmas-repo-scan.yml` analiza el checkout con TMAS para buscar vulnerabilidades OSS y secretos. El análisis de malware no se activa para este artefacto de directorio.
 
----
+## Escaneo de imágenes
 
-## Requisitos
+`tmas-image-scan.yml` construye backend y frontend desde la revisión que se ejecuta, los etiqueta con su SHA y analiza esas mismas imágenes del daemon Docker. Activa análisis de vulnerabilidades, malware y secretos.
 
-En GitHub se creó el secret:
+Este workflow no utiliza las etiquetas remotas antiguas y no publica las imágenes. El recorrido local de Colima utiliza igualmente sus Dockerfiles, aunque identifica las imágenes por la huella del contenido local.
 
-TMAS_API_KEY
+## Evaluación directa del modelo
 
-Ruta en GitHub:
+`tmas-ai-scanner.yml` utiliza `security/ai-scanner/tmas-aiscan-llm-config.yaml` y apunta al proveedor OpenAI. No atraviesa el backend, la memoria de sesiones ni AI Guard, y por tanto no equivale a probar la protección integral del portal.
 
-Settings -> Secrets and variables -> Actions
+El formato de configuración y la política de severidad deben validarse con el CLI antes de atribuir garantías al escaneo. Publicar un informe no configura por sí solo una regla de bloqueo de merge.
 
----
+## Configuración de GitHub
 
-## Región utilizada
+Los escaneos utilizan `TMAS_API_KEY`; la evaluación del modelo también necesita `OPENAI_API_KEY`. La región configurada es `eu-central-1`. Las credenciales se proporcionan mediante GitHub Secrets, no mediante archivos versionados.
 
-Para esta demo se utiliza:
-
-eu-central-1
-
-Se pasa a TMAS mediante:
-
-additionalArgs: --region=eu-central-1
-
----
-
-## Workflow 1 – Repo Scan
-
-Fichero:
-
-.github/workflows/tmas-repo-scan.yml
-
-Objetivo:
-
-Escanear el contenido del repositorio en cada push a main, pull request y ejecución manual.
-
-Conceptos clave usados:
-
-- actions/checkout@v4
-- trendmicro/tmas-scan-action@v3.1.3
-- artifact: dir:./repo
-
-Capacidades activadas:
-
-- vulnerabilitiesScan: true
-- secretsScan: true
-- malwareScan: false
-
-Resumen funcional:
-
-1. Se hace checkout del repo
-2. TMAS analiza el directorio
-3. Se buscan:
-   - vulnerabilidades OSS
-   - secretos en código
-
----
-
-## Workflow 2 – Image Scan
-
-Fichero:
-
-.github/workflows/tmas-image-scan.yml
-
-Objetivo:
-
-Escanear imágenes Docker publicadas en registry.
-
-Artefactos utilizados:
-
-- registry:drdro28/trendo-backend:0.3.3
-- registry:drdro28/trendo-frontend:0.1.3
-
-Capacidades activadas:
-
-- vulnerabilitiesScan: true
-- malwareScan: true
-- secretsScan: true
-
-Resumen funcional:
-
-1. TMAS descarga la imagen desde el registry
-2. Analiza:
-   - CVEs
-   - malware
-   - secretos
-3. Devuelve findings en GitHub Actions
-
----
-
-## Problemas resueltos durante la integración
-
-### Versión de la action
-
-Inicialmente se intentó usar:
-
-trendmicro/tmas-scan-action@v2
-
-Esto falló porque ese tag no existía.
-
-Se corrigió a:
-
-trendmicro/tmas-scan-action@v3.1.3
-
-### Trigger manual
-
-Para poder lanzar workflows manualmente desde la UI de GitHub se añadió:
-
-workflow_dispatch:
-
-Sin ese bloque no aparece el botón "Run workflow".
-
-### Push de workflows
-
-GitHub rechazó inicialmente el push porque el PAT no tenía permiso para modificar workflows.
-
-Se solucionó usando un token con scope:
-
-- repo
-- workflow
-
----
-
-## Valor de la integración
-
-TMAS cubre la capa de seguridad previa al despliegue:
-
-- código fuente
-- imágenes Docker
-- artefactos
-
-De esta forma la demo cubre:
-
-- runtime documental
-- runtime IA
-- pipeline / CI-CD
-
-====================================================================
+Los permisos de workflows, comentarios y reglas de merge se revisarán al publicar. Los comandos locales de [desarrollo y validación](../development.md) permiten comprobar las aplicaciones antes de ese paso.

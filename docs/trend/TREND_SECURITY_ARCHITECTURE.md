@@ -1,135 +1,41 @@
-# TREND_SECURITY_ARCHITECTURE.md
+# Arquitectura de seguridad
 
-# Arquitectura de Seguridad – AI-untamiento de Trendo
+La demo combina protección durante el uso del portal y análisis durante el desarrollo. El backend mantiene las decisiones de negocio y delega las inspecciones en los adaptadores de AI Guard y File Security.
 
-## Visión general
+## Chat
 
-La demo se ha diseñado para demostrar protección en varias capas de una aplicación moderna con IA.
+```mermaid
+flowchart LR
+  U[Consulta ciudadana] --> I[AI Guard: entrada]
+  I -->|Permitida| L[OpenAI y contexto municipal]
+  I -->|Bloqueada o no verificable| B[Respuesta controlada]
+  L --> O[AI Guard: salida]
+  O -->|Permitida| H[Historial de la conversación]
+  H --> R[Respuesta al usuario]
+  O -->|Bloqueada o no verificable| B
+```
 
-Se cubren tres planos:
+La política estricta no permite avanzar si AI Guard devuelve un error o un contrato desconocido. El modo permisivo es una opción explícita de demostración y se muestra como degradado; las respuestas no verificadas no se guardan en el historial.
 
-1. Documentos
-2. Chatbot IA
-3. Pipeline de desarrollo
+Las sesiones son efímeras, limitadas y aisladas por token. El despliegue utiliza una réplica; estos tokens no sustituyen autenticación ni permisos sobre expedientes reales.
 
----
+## Documentos
 
-## Capa 1 – File Security
+```mermaid
+flowchart LR
+  U[Archivo recibido] --> I[incoming: identificador único]
+  I --> S[File Security: gRPC]
+  S -->|Limpio y válido| C[clean]
+  S -->|Malicioso| Q[quarantine]
+  S -->|Error o resultado desconocido| P[Pendiente en incoming]
+```
 
-Protege la subida de archivos de la ciudadanía.
+Se limita el tamaño de la carga antes del parser multipart y durante la copia del archivo. El nombre aportado por el usuario no se utiliza como ruta. El servicio de escaneo se invoca desde una ruta síncrona ejecutada fuera del bucle asíncrono.
 
-Función:
+## Desarrollo y operación
 
-- Analizar archivos en tiempo real
-- Detectar malware
-- Clasificar el contenido
+Los workflows locales validan backend y frontend, y preparan escaneos TMAS de repositorio e imágenes de la revisión. El arranque oficial construye imágenes locales identificadas por contenido. Las bases se fijan por digest y las dependencias por lockfile.
 
-Tecnología usada:
+Los secretos se generan en `.runtime/secrets/`; los originales retirados permanecen en `.local/`, fuera de Git. Los eventos operativos se guardan en SQLite sin prompts ni respuestas. Los contenedores se ejecutan sin privilegios y disponen de probes y recursos limitados.
 
-Trend Vision One File Security – Containerized Scanner
-
-Ubicación:
-
-Dentro de Kubernetes
-
----
-
-## Capa 2 – AI Guard
-
-Protege el uso del LLM.
-
-Función:
-
-- Inspección de prompts
-- Detección de prompt injection
-- Revisión de salidas del modelo
-- Aplicación de guardrails gestionados por Trend
-
-Tecnología usada:
-
-Trend Vision One AI Guard
-
-Ubicación:
-
-API cloud EU
-
----
-
-## Capa 3 – TMAS
-
-Protege el pipeline de desarrollo.
-
-Función:
-
-- Escanear el código
-- Escanear imágenes Docker
-- Detectar vulnerabilidades, malware y secretos
-
-Tecnología usada:
-
-Trend Micro Artifact Scanner (TMAS)
-
-Ubicación:
-
-GitHub Actions
-
----
-
-## Flujo completo de seguridad
-
-### Flujo documental
-
-Usuario -> Frontend -> Backend -> File Security Scanner -> clean/quarantine
-
-### Flujo IA
-
-Usuario -> Frontend -> Backend -> AI Guard -> LLM -> AI Guard -> Usuario
-
-### Flujo CI/CD
-
-Git push -> GitHub Actions -> TMAS -> Findings
-
----
-
-## Objetivo de la demo
-
-Mostrar seguridad integrada en todo el ciclo de una aplicación:
-
-- Build time
-- Run time documental
-- Run time IA
-
----
-
-## Mensaje clave
-
-La seguridad en aplicaciones con IA no debe limitarse a proteger el modelo.
-
-Debe cubrir:
-
-- archivos de entrada
-- prompts
-- respuestas
-- artefactos de despliegue
-- pipeline de desarrollo
-
-====================================================================
-
-# Cómo crear estos ficheros en tu repo
-
-Crea cada documento así:
-
-nano TREND_FILE_SECURITY_DEPLOYMENT.md
-nano TREND_AI_GUARD_DEPLOYMENT.md
-nano TREND_TMAS_CICD.md
-nano TREND_SECURITY_ARCHITECTURE.md
-
-Pega el contenido correspondiente en cada fichero y guarda.
-
-====================================================================
-
-# Cómo subirlos a Git
-
-git add TREND_FILE_SECURITY_DEPLOYMENT.md TREND_AI_GUARD_DEPLOYMENT.md TREND_TMAS_CICD.md TREND_SECURITY_ARCHITECTURE.md
-git commit -m "Add Trend deployment documentation"
-git push
+Más detalles: [AI Guard](TREND_AI_GUARD_DEPLOYMENT.md), [File Security](TREND_FILE_SECURITY_DEPLOYMENT.md), [TMAS](TREND_TMAS_CICD.md) y [operación del entorno](../overview/OPERACION_DEMO.md).

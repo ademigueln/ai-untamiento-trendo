@@ -1,0 +1,46 @@
+name: Validar portal y despliegue
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: portal-backend/requirements.lock
+      - run: pip install -r portal-backend/requirements.lock
+      - run: python -m unittest discover -s tests -v
+        working-directory: portal-backend
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: portal-frontend/package-lock.json
+      - run: npm ci
+        working-directory: portal-frontend
+      - run: npm run format:check
+        working-directory: portal-frontend
+      - run: npm run lint -- --max-warnings 0
+        working-directory: portal-frontend
+      - run: npm run build
+        working-directory: portal-frontend
+  deployment:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y zsh
+      - run: python -m unittest discover -s scripts/tests -v

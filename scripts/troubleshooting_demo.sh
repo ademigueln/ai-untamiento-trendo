@@ -2,14 +2,12 @@
 
 set -u
 
-PROJECT_DIR="/Users/alvaro_demiguel/Downloads/AI/atencion ciudadana"
-NAMESPACE="trendo-demo"
-
-BACKEND_LOCAL_PORT="9000"
-BACKEND_REMOTE_PORT="8007"
-
-FRONTEND_LOCAL_PORT="8081"
-FRONTEND_REMOTE_PORT="80"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/demo-config.sh"
+load_demo_env || exit 1
+NAMESPACE="$APP_NAMESPACE"
+mkdir -p "$LOG_DIR"
 
 TMP_DIR="/tmp/trendo-troubleshooting"
 TEST_FILE="$TMP_DIR/eicar.txt"
@@ -58,20 +56,25 @@ done
 echo ""
 
 echo "[6/12] Variables de entorno clave del backend"
-kubectl exec -n "$NAMESPACE" deployment/backend -- env | egrep "OPENAI_API_KEY|UPLOAD_DIR|FILE_SECURITY|TREND_AI" || true
+kubectl exec -i -n "$NAMESPACE" deployment/backend -- python - <<'PYENV'
+import os
+for key in ("OPENAI_API_KEY", "TREND_API_KEY", "FILE_SECURITY_API_KEY", "UPLOAD_DIR", "FILE_SECURITY_HOST", "TREND_AI_URL"):
+    print(f"{key}: {'configurada' if os.getenv(key) else 'AUSENTE'}")
+PYENV
 echo ""
 
 echo "[7/12] Revisión rápida de File Security Scanner"
-kubectl get pods -n visionone-filesecurity || true
+kubectl get pods -n "$FS_NAMESPACE" || true
 echo ""
-kubectl get svc -n visionone-filesecurity || true
+kubectl get svc -n "$FS_NAMESPACE" || true
 echo ""
 
 echo "[8/12] Validando DNS del scanner desde el backend"
-kubectl exec -n "$NAMESPACE" deployment/backend -- python - <<'PY'
+kubectl exec -i -n "$NAMESPACE" deployment/backend -- python - <<'PY'
+import os
 import socket
 
-host = "my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local"
+host = os.environ["FILE_SECURITY_HOST"].rsplit(":", 1)[0]
 try:
     ip = socket.gethostbyname(host)
     print(f"OK - DNS resuelve {host} -> {ip}")
@@ -81,14 +84,7 @@ PY
 echo ""
 
 echo "[9/12] Reiniciando port-forwards"
-pkill -f "port-forward -n $NAMESPACE service/backend-service" 2>/dev/null || true
-pkill -f "port-forward -n $NAMESPACE service/frontend-service" 2>/dev/null || true
-sleep 2
-
-nohup kubectl port-forward -n "$NAMESPACE" service/backend-service "${BACKEND_LOCAL_PORT}:${BACKEND_REMOTE_PORT}" >/tmp/trendo-backend-portforward.log 2>&1 &
-sleep 2
-nohup kubectl port-forward -n "$NAMESPACE" service/frontend-service "${FRONTEND_LOCAL_PORT}:${FRONTEND_REMOTE_PORT}" >/tmp/trendo-frontend-portforward.log 2>&1 &
-sleep 2
+start_demo_ports || exit 1
 
 echo "Backend local  -> http://127.0.0.1:${BACKEND_LOCAL_PORT}"
 echo "Frontend local -> http://127.0.0.1:${FRONTEND_LOCAL_PORT}"

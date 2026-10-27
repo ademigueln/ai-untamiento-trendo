@@ -1,94 +1,60 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel, Field, field_validator
 from app.services.chatbot import get_ai_reply
-from app.services.ai_guard import inspect_prompt, inspect_output
+from app.services.ai_guard import inspect_prompt, inspect_output, guard_connection
+from app.services.ai_events import record_ai_event, set_service_health
+from app.services.memory import conversation, add_exchange, clear_memory
 
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=8000)
+    conversation_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
+
+    @field_validator("message")
+    @classmethod
+    def meaningful(cls, value):
+        if not value.strip():
+            raise ValueError("Escribe una consulta")
+        return value.strip()
 
 
 @router.post("")
-def chat(request: ChatRequest):
-     # -------------------------------------------------------------------
-    # Punto de entrada del flujo conversacional.
-    # Aquí recibimos el mensaje del usuario desde el frontend.
-    # -------------------------------------------------------------------
-    print(f"[CHAT] Mensaje recibido: {request.message}")
+def chat(request: ChatRequest, response: Response):
+    with conversation(request.conversation_id) as (token, history), guard_connection():
+        prompt_check = inspect_prompt(request.message)
+        output_check = None
+        action = "allowed"
+        check = prompt_check
+        if not prompt_check["allowed"]:
+            action = "unavailable" if check["source"] == "trend_unavailable" else "blocked_input"
+            reply = "La protección del chat no está disponible. Inténtalo más tarde." if action == "unavailable" else "Solicitud bloqueada por Trend AI Guard."
+        else:
+            try:
+                reply = get_ai_reply(request.message, history)
+            except Exception:
+                set_service_health("llm", False)
+                record_ai_event("llm_unavailable", "unavailable")
+                raise HTTPException(503, "El servicio de IA no está disponible. Inténtalo más tarde.") from None
+            set_service_health("llm", True)
+            output_check = inspect_output(request.message, reply)
+            check = output_check
+            if not output_check["allowed"]:
+                action = "unavailable" if check["source"] == "trend_unavailable" else "blocked_output"
+                reply = "No se ha podido validar la respuesta. Inténtalo más tarde." if action == "unavailable" else "La respuesta generada ha sido bloqueada por Trend AI Guard."
+            elif any(c["source"] == "trend_unavailable" for c in (prompt_check, output_check)):
+                action = "degraded"
+                check = {"source": "trend_unavailable", "reason": "Respuesta sin todas las comprobaciones de seguridad."}
+            else:
+                add_exchange(token, request.message, reply)
+        record_ai_event(check.get("event_type", "allowed") if action != "allowed" else "allowed", action)
+        if action == "unavailable":
+            response.status_code = 503
+        return {"reply": reply, "conversation_id": token, "guard_action": action,
+                "guard_reason": check.get("reason"), "guard_source": check["source"]}
 
-# -------------------------------------------------------------------
-    # 1. Validación de entrada con Trend AI Guard.
-    # Antes de llamar al modelo, se analiza el prompt del usuario para
-    # detectar prompt injection, contenido dañino o peticiones no deseadas.
-    #
-    # Esta llamada delega en:
-    # - inspect_prompt(...)  -> ai_guard.py
-    # - call_trend_ai_guard(...) -> requests.post(...) a Trend
-    # -------------------------------------------------------------------
 
-    prompt_check = inspect_prompt(request.message)
-    print(f"[CHAT] prompt_check={prompt_check}")
-
-    # -------------------------------------------------------------------
-    # Si Trend AI Guard decide bloquear la entrada, no se llama al modelo.
-    # El flujo se corta aquí y devolvemos una respuesta controlada al frontend.
-    # -------------------------------------------------------------------
-    if not prompt_check["allowed"]:
-        return {
-            "reply": "Solicitud bloqueada por Trend AI Guard.",
-            "guard_action": "blocked_input",
-            "guard_reason": prompt_check["reason"],
-            "guard_source": prompt_check.get("source"),
-            "prompt_guard_result": prompt_check.get("trend_result"),
-            "output_guard_result": None,
-        }
-        
-# -------------------------------------------------------------------
-    # 2. Llamada al modelo LLM.
-    # Solo se ejecuta si el prompt ha sido permitido por Trend.
-    #
-    # Esta llamada delega en:
-    # - get_ai_reply(...) -> chatbot.py
-    # -------------------------------------------------------------------
-    reply = get_ai_reply(request.message)
-    print(f"[CHAT] reply modelo={reply}")
-    # -------------------------------------------------------------------
-    # 3. Validación de salida con Trend AI Guard.
-    # Una vez generado el texto por el modelo, se vuelve a evaluar con Trend
-    # para decidir si la respuesta puede salir al usuario final.
-    #
-    # Esta llamada delega en:
-    # - inspect_output(prompt, reply) -> ai_guard.py
-    # - call_trend_ai_guard(reply, "output")
-    # -------------------------------------------------------------------
-    output_check = inspect_output(request.message, reply)
-    print(f"[CHAT] output_check={output_check}")
-    # -------------------------------------------------------------------
-    # Si Trend bloquea la salida, no devolvemos el texto generado por el modelo.
-    # En su lugar devolvemos una respuesta controlada indicando bloqueo.
-    # -------------------------------------------------------------------
-    if not output_check["allowed"]:
-        return {
-            "reply": "La respuesta generada ha sido bloqueada por Trend AI Guard.",
-            "guard_action": "blocked_output",
-            "guard_reason": output_check["reason"],
-            "guard_source": output_check.get("source"),
-            "prompt_guard_result": prompt_check.get("trend_result"),
-            "output_guard_result": output_check.get("trend_result"),
-        }
-    # -------------------------------------------------------------------
-    # Flujo permitido de extremo a extremo:
-    # - prompt permitido
-    # - respuesta permitida
-    # Se devuelve la respuesta final junto con metadatos de control.
-    # -------------------------------------------------------------------
-    return {
-        "reply": reply,
-        "guard_action": "allowed",
-        "guard_reason": None,
-        "guard_source": output_check.get("source", prompt_check.get("source")),
-        "prompt_guard_result": prompt_check.get("trend_result"),
-        "output_guard_result": output_check.get("trend_result"),
-    }
+@router.delete("/{token}", status_code=204)
+def delete_conversation(token: str):
+    clear_memory(token)

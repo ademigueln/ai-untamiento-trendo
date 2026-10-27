@@ -1,160 +1,34 @@
-# TREND_FILE_SECURITY_DEPLOYMENT.md
+# File Security
 
-# Trend Vision One – File Security (Containerized Scanner)
+El recorrido oficial instala el scanner contenerizado mediante Helm y conecta el backend por gRPC. El análisis se ejecuta dentro del entorno; el registro y los demás componentes conservan sus dependencias de servicio y conectividad.
 
-## Descripción
+## Configuración del despliegue
 
-En esta demo se ha desplegado Trend Vision One File Security en modo contenerizado dentro de Kubernetes.
+- Contexto: `colima`.
+- Namespace: `visionone-filesecurity`.
+- Release: `my-release`.
+- Chart fijado: `1.6.3`, definido en `scripts/lib/demo-config.sh`.
+- Valores: `k8s/file-security.values.yaml`.
+- Host predeterminado: `my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local:50051`.
 
-Esto permite analizar archivos en tiempo real sin depender de APIs externas, utilizando un scanner interno accesible por gRPC.
+El script genera el secreto de registro y conserva `device-token-secret` si ya existe. Un error al consultar ese secreto aborta el despliegue. Los reinicios forzados de registro y gestión solo se habilitan con `--repair-security`.
 
----
+`FILE_SECURITY_API_KEY` y `FILE_SECURITY_HOST` se cargan desde `.env.demo.local`. El backend usa el SDK fijado en `requirements.lock`. La conexión local mantiene TLS desactivado por compatibilidad con esta instalación; otro entorno requiere configurar y validar su transporte.
 
-## Arquitectura desplegada
+## Flujo documental
 
-Namespace:
+1. El backend limita la carga y copia el archivo por bloques con un identificador interno único.
+2. El adaptador inicializa el canal, solicita el análisis y lo cierra en `finally`.
+3. El servicio valida el contrato del resultado y decide la zona documental.
 
-visionone-filesecurity
+Los destinos son `clean` para un análisis válido y limpio, `quarantine` para detección de malware e `incoming` para un error o un resultado desconocido. Un resultado incompleto no se interpreta como limpio.
 
-Componentes principales:
-
-- scanner (gRPC endpoint)
-- management-service
-- backend-communicator
-- scan-cache
-- prometheus-agent
-
----
-
-## Despliegue
-
-El despliegue se ha realizado en Kubernetes utilizando el modelo contenerizado de Trend Vision One File Security.
-
-Pasos generales realizados:
-
-1. Crear namespace:
-   kubectl create namespace visionone-filesecurity
-
-2. Crear secrets requeridos por Trend:
-   - token-secret
-   - device-token-secret
-
-3. Añadir el repositorio Helm oficial:
-   helm repo add visionone-filesecurity https://trendmicro.github.io/visionone-file-security-helm/
-   helm repo update
-
-4. Instalar el scanner:
-   helm install my-release visionone-filesecurity/visionone-filesecurity -n visionone-filesecurity
-
----
+El límite predeterminado es 20 MiB por archivo; Nginx permite un margen para la envoltura multipart. El nombre original se utiliza como dato de presentación, nunca como ruta de almacenamiento. La respuesta muestra el identificador, veredicto, zona y metadatos disponibles del análisis.
 
 ## Verificación
 
-Comandos utilizados:
+```sh
+./scripts/troubleshooting_file_security.sh
+```
 
-kubectl get pods -n visionone-filesecurity
-kubectl get svc -n visionone-filesecurity
-kubectl get secret -n visionone-filesecurity
-
-Servicio principal utilizado por la demo:
-
-my-release-visionone-filesecurity-scanner
-
-Puerto:
-
-50051 (gRPC)
-
----
-
-## Integración con el backend
-
-El backend FastAPI se conecta al scanner mediante DNS interno de Kubernetes:
-
-my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local:50051
-
----
-
-## Variables de entorno utilizadas
-
-En el backend se usan estas variables:
-
-- FILE_SECURITY_API_KEY
-- FILE_SECURITY_HOST
-
-Ejemplo:
-
-FILE_SECURITY_HOST=my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local:50051
-
----
-
-## Implementación en Python
-
-Se utiliza el SDK de Python basado en amaas.grpc.
-
-Flujo implementado:
-
-1. Inicializar canal contra el scanner
-2. Ejecutar scan_file
-3. Cerrar canal
-4. Parsear JSON devuelto
-
-Ejemplo simplificado:
-
-import amaas.grpc
-
-channel = amaas.grpc.init(
-    host="my-release-visionone-filesecurity-scanner.visionone-filesecurity.svc.cluster.local:50051",
-    api_key="YOUR_API_KEY",
-    enable_tls=False
-)
-
-result = amaas.grpc.scan_file(channel, file_path)
-amaas.grpc.quit(channel)
-
----
-
-## Flujo funcional de la demo
-
-1. Usuario sube un archivo desde el frontend
-2. El backend lo guarda en:
-   /data/uploads/incoming
-3. El backend envía el archivo al scanner
-4. Trend File Security devuelve un JSON con:
-   - scanId
-   - malwareCount
-   - fileTypeName
-   - fileSHA1
-   - fileSHA256
-   - scannerVersion
-5. El backend clasifica:
-   - clean -> /data/uploads/clean
-   - malicious -> /data/uploads/quarantine
-
----
-
-## Resultado mostrado en UI
-
-La UI muestra:
-
-- Nombre de archivo
-- Veredicto
-- Destino final
-- Tipo de fichero
-- Malware detectado
-- Scan ID
-- Versión del scanner
-- SHA256
-- Tiempo de análisis
-- Origen del escaneo
-
----
-
-## Beneficios del enfoque contenerizado
-
-- El análisis se ejecuta dentro del cluster
-- Baja latencia
-- Mayor control del tráfico
-- Arquitectura más adecuada para entornos regulados
-- Escalabilidad y separación de componentes
-
-====================================================================
+La prueba utiliza EICAR y modifica los datos y contadores de la demo. Los diagnósticos comparten contexto, puertos y registro de procesos con el arranque oficial. Las pruebas automatizadas comprueban, sin contactar con Trend, la clasificación, el cierre del canal y el tratamiento de errores.

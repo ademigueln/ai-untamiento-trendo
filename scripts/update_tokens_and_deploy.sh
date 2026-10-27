@@ -2,8 +2,11 @@
 
 set -euo pipefail
 
-ENV_FILE=".env.demo.local"
-DEPLOY_SCRIPT="./scripts/desplegar_demo_full.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/demo-config.sh"
+cd "$PROJECT_DIR"
+DEPLOY_SCRIPT="$SCRIPT_DIR/desplegar_demo_full_v2.sh"
 
 TOKENS=(
   "OPENAI_API_KEY"
@@ -46,20 +49,7 @@ update_env_var() {
   local var_name="$1"
   local new_value="$2"
 
-  awk -v key="$var_name" -v val="$new_value" '
-    BEGIN { replaced=0 }
-    $0 ~ "^" key "=" {
-      print key "=\"" val "\""
-      replaced=1
-      next
-    }
-    { print }
-    END {
-      if (replaced == 0) {
-        print key "=\"" val "\""
-      }
-    }
-  ' "$ENV_FILE" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "$ENV_FILE"
+  printf '%s' "$new_value" | python3 "$SCRIPT_DIR/lib/update-env.py" "$ENV_FILE" "$var_name"
 }
 
 read_token_value() {
@@ -83,7 +73,7 @@ read_token_value() {
     fi
   else
     echo "Pega el valor para $var_name y pulsa Enter:"
-    read -rs new_value
+    read -r new_value
     echo
     if [ -z "${new_value:-}" ]; then
       echo "ERROR: valor vacío para $var_name"

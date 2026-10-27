@@ -1,32 +1,35 @@
-# Python
+# Entornos y datos locales
+/.local/
+/.runtime/
 .venv/
-__pycache__/
-*.pyc
-
-# Node
 node_modules/
 dist/
-
-# Logs
-*.log
-
-# Local data
+coverage/
+/security/labs/ollama/report.html
+/security/labs/ollama/report.json
 portal-backend/data/uploads/
+portal-backend/uploads/
 
-# Secrets
+# Credenciales y manifiestos generados
 .env
-.env.docker
+.env.*
+!.env*.example
+k8s/secret.yaml
+k8s/file-security-secrets.yaml
+overrides.yaml
+*.local.yaml
+*.local.yml
+claveApi.txt
 
-# macOS
+# Cachés, bases de datos y logs
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
 .DS_Store
 
-# IDE
+# Configuración del editor
 .vscode/
 .idea/
-.env.demo.local
-k8s/secret.yaml
-scripts/comandos para secrets
-
-# Basura
-claveApi.txt
-claveApi.txt

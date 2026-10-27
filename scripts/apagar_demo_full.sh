@@ -5,9 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-APP_NAMESPACE="trendo-demo"
-FS_NAMESPACE="visionone-filesecurity"
-FS_RELEASE="my-release"
+source "$SCRIPT_DIR/lib/demo-config.sh"
 
 echo "==============================================="
 echo " AI-untamiento de Trendo - Apagado total demo "
@@ -20,8 +18,7 @@ cd "$PROJECT_DIR"
 # 1. Matar port-forwards
 # --------------------------------------------------
 echo "[1/6] Matando port-forwards..."
-pkill -f "port-forward -n $APP_NAMESPACE service/backend-service" 2>/dev/null || true
-pkill -f "port-forward -n $APP_NAMESPACE service/frontend-service" 2>/dev/null || true
+stop_demo_ports
 echo "Port-forwards detenidos"
 echo ""
 
@@ -70,12 +67,12 @@ echo ""
 # 6. Limpieza local de logs
 # --------------------------------------------------
 echo "[6/6] Limpiando logs locales..."
-rm -f "$PROJECT_DIR/backend-portforward.log"
-rm -f "$PROJECT_DIR/frontend-portforward.log"
+rm -f "$BACKEND_PF_LOG"
+rm -f "$FRONTEND_PF_LOG"
 echo "Logs locales eliminados"
 echo ""
 
 echo "Apagado completo de la demo finalizado."
 echo ""
 echo "Ahora puedes probar arranque desde cero con:"
-echo "  ./scripts/desplegar_demo_full.sh"
+echo "  ./scripts/desplegar_demo_full_v2.sh"

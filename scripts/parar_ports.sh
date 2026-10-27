@@ -1,6 +1,9 @@
 #!/bin/zsh
 
-pkill -f "port-forward -n trendo-demo service/backend-service" 2>/dev/null || true
-pkill -f "port-forward -n trendo-demo service/frontend-service" 2>/dev/null || true
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/demo-config.sh"
+
+stop_demo_ports
 
 echo "Port-forwards detenidos."

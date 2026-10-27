@@ -1,20 +1,18 @@
 #!/bin/zsh
 
-NAMESPACE="trendo-demo"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/demo-config.sh"
+load_demo_env || exit 1
+NAMESPACE="$APP_NAMESPACE"
+mkdir -p "$LOG_DIR"
+
 TMP_FILE="/tmp/eicar.txt"
 
-pkill -f "port-forward -n $NAMESPACE service/backend-service" 2>/dev/null || true
-sleep 1
-
-nohup kubectl port-forward -n "$NAMESPACE" service/backend-service 9000:8007 >/tmp/trendo-backend-portforward.log 2>&1 &
-sleep 2
-
-cat > "$TMP_FILE" <<'EOF'
-X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
-EOF
+start_demo_ports || exit 1
 
 echo "Probando File Security..."
-curl -s -X POST "http://127.0.0.1:9000/api/files/upload" \
+curl -s -X POST "http://127.0.0.1:${BACKEND_LOCAL_PORT}/api/files/upload" \
   -F "file=@${TMP_FILE}"
 
 echo ""

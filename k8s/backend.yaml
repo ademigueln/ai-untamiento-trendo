@@ -13,10 +13,36 @@ spec:
       labels:
         app: backend
     spec:
+      securityContext:
+        fsGroup: 10001
       containers:
         - name: backend
-          image: drdro28/trendo-backend:0.3.5
-          imagePullPolicy: Always
+          image: trendo-backend:local
+          imagePullPolicy: Never
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8007
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8007
+            initialDelaySeconds: 10
+            periodSeconds: 15
           ports:
             - containerPort: 8007
 
@@ -61,10 +87,33 @@ spec:
                   key: TREND_API_KEY
 
             - name: TREND_AI_URL
-              value: "https://api.eu.xdr.trendmicro.com/v3.0/aiSecurity/applyGuardrails"
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-ai
+                  key: TREND_AI_URL
 
             - name: TREND_AI_APP_NAME
-              value: "ai-untamiento-trendo"
+              valueFrom:
+                secretKeyRef:
+                  name: trendo-ai
+                  key: TREND_AI_APP_NAME
+
+            - name: OPENAI_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: trendo-config
+                  key: OPENAI_MODEL
+            - name: GUARD_FAIL_OPEN
+              valueFrom:
+                configMapKeyRef:
+                  name: trendo-config
+                  key: GUARD_FAIL_OPEN
+            - name: MAX_UPLOAD_BYTES
+              value: "20971520"
+            - name: TM_AM_SCAN_TIMEOUT_SECS
+              value: "60"
+            - name: FILE_SECURITY_TLS
+              value: "false"
 
           volumeMounts:
             - name: uploads-volume

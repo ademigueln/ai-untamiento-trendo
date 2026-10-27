@@ -1,7 +1,6 @@
-fastapi
-uvicorn
-python-multipart
-openai
-python-dotenv
-requests
-visionone-filesecurity
+fastapi==0.135.1
+uvicorn==0.42.0
+python-multipart==0.0.22
+openai==2.29.0
+httpx==0.28.1
+visionone-filesecurity==1.5.0

@@ -1,0 +1,54 @@
+# ============================================================================
+# scan_config.yaml — Piloto Agentic Attacks vs Ollama local
+#
+# ANTES de lanzar `tmas aiscan llm -c scan_config.yaml`, en la terminal donde
+# corre `ollama serve`:
+#
+#   export OLLAMA_KEEP_ALIVE=30m        # no descargar el modelo entre llamadas
+#   export OLLAMA_MAX_LOADED_MODELS=1   # un solo modelo para target/judge/attacker:
+#                                        # evita el swapping que causaba los
+#                                        # "context deadline exceeded" con 3 modelos
+#
+# Precalienta el modelo antes del scan:
+#   ollama run qwen2.5:1.5b "hola"
+# ============================================================================
+
+version: 2.11.0 # >= 2.10.0 requerido por el bloque "output"; 2.11.0 dropea judge.name
+name: Escaneo Local Ollama
+target:
+  name: ollama-target-model
+  endpoint: http://127.0.0.1:11434/v1
+  api_key_env: TARGET_API_KEY
+  openai:
+    model: qwen2.5:1.5b # Bajado de 7b: menos margen de timeout si hay throttling termico sostenido
+
+judge:
+  endpoint: http://127.0.0.1:11434/v1
+  api_key_env: JUDGE_API_KEY
+  openai:
+    model: qwen2.5:1.5b
+
+settings:
+  concurrency: 1 # Bajado de 2 a 1 para evitar contencion de modelos en Ollama
+  max_scan_duration_minutes: 180 # subido de 30: a ~5-6 ataques/min, 815 ataques necesitan ~2h30
+
+# Salida 100% local: no requiere TMAS_API_KEY ni sube nada a Vision One.
+# chat_history:true guarda la conversacion completa de cada intento, asi
+# puedes distinguir "el target resistio el ataque" de "la llamada fallo".
+output:
+  - local:
+      format: html
+      filename: report.html
+      chat_history: true
+  - local:
+      format: json
+      filename: report.json
+      chat_history: true
+
+# Bateria de prompts estaticos (no agentic) alineada con OWASP Top 10 for LLM
+# Applications. Se combina con el bloque agentic de abajo: ambas estrategias
+# corren de forma secuencial en el mismo scan.
+attack_preset: OWASP
+
+agentic:
+  - ./agentic_ollama.yaml

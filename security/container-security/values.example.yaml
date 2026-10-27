@@ -1,0 +1,15 @@
+visionOne:
+    bootstrapToken: "RELLENAR_LOCALMENTE"
+    endpoint: https://api.eu.xdr.trendmicro.com/external/v2/direct/vcs/external/vcs
+    exclusion:
+        namespaces: [kube-system]
+    runtimeSecurity:
+        enabled: true
+    vulnerabilityScanning:
+        enabled: true
+    malwareScanning:
+        enabled: true
+    secretScanning:
+        enabled: true
+    fileIntegrityMonitoring:
+        enabled: true
